@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { Logo } from "@/components/brand/logo";
 import { supabase } from "@/lib/supabase";
 import type { TriviaQuestion } from "@/lib/types";
 
@@ -273,28 +274,28 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pb-8 pt-5 sm:px-6">
+    <main className="relative mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pb-8 pt-5 text-brand-cream sm:px-6">
       <header className="mb-5 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-pitch/70">Realtime rooms</p>
-          <h1 className="mt-1 text-4xl font-black leading-none text-pitch">Free Time</h1>
+          <Logo variant="compact" />
+          <p className="mt-3 text-xs font-black uppercase tracking-[0.2em] text-brand-lime/75">Realtime rooms</p>
         </div>
-        <button type="button" onClick={onBack} className="rounded-lg bg-pitch px-4 py-3 text-sm font-black text-line shadow-sm transition active:scale-95">
+        <button type="button" onClick={onBack} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-3 text-sm font-black text-brand-cream shadow-brand transition active:scale-95">
           Solo
         </button>
       </header>
 
       {roomStatus === "setup" ? (
         <section className="space-y-4">
-          <section className="rounded-lg bg-pitch p-5 text-line shadow-soft">
+          <section className="relative overflow-hidden rounded-lg border border-brand-cream/10 bg-brand-panel/90 p-5 text-brand-cream shadow-brand">
             <h2 className="text-2xl font-black leading-tight">Create or join a room</h2>
-            <p className="mt-3 text-sm font-semibold text-line/75">Category: {selectedCategory}</p>
-            <p className="mt-2 text-sm font-semibold text-line/75">{message}</p>
+            <p className="mt-3 text-sm font-semibold text-brand-cream/75">Category: {selectedCategory}</p>
+            <p className="mt-2 text-sm font-semibold text-brand-cream/75">{message}</p>
           </section>
 
-          <label className="block text-sm font-black uppercase tracking-wide text-pitch/70">
+          <label className="block text-sm font-black uppercase tracking-wide text-brand-cream/65">
             Host question
-            <select value={selectedQuestionId} onChange={(event) => setSelectedQuestionId(event.target.value)} className="mt-2 w-full rounded-md border-0 bg-white px-4 py-4 text-base font-bold normal-case tracking-normal text-ink shadow-sm">
+            <select value={selectedQuestionId} onChange={(event) => setSelectedQuestionId(event.target.value)} className="mt-2 w-full rounded-md border border-brand-cream/10 bg-brand-bg px-4 py-4 text-base font-bold normal-case tracking-normal text-brand-cream shadow-sm">
               {questions.length === 0 ? <option value="">No questions in this category</option> : null}
               {questions.map((roomQuestion) => (
                 <option key={roomQuestion.id} value={roomQuestion.id}>
@@ -304,23 +305,23 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
             </select>
           </label>
 
-          <label className="block text-sm font-black uppercase tracking-wide text-pitch/70">
+          <label className="block text-sm font-black uppercase tracking-wide text-brand-cream/65">
             Username
-            <input value={username} onChange={(event) => setUsername(event.target.value)} className="mt-2 w-full rounded-md border-0 bg-white px-4 py-4 text-base font-bold normal-case tracking-normal text-ink shadow-sm" placeholder="Your name" />
+            <input value={username} onChange={(event) => setUsername(event.target.value)} className="mt-2 w-full rounded-md border border-brand-cream/10 bg-brand-bg px-4 py-4 text-base font-bold normal-case tracking-normal text-brand-cream shadow-sm" placeholder="Your name" />
           </label>
 
           <form onSubmit={createRoom}>
-            <button type="submit" className="w-full rounded-lg bg-coral px-4 py-4 text-sm font-black uppercase text-white shadow-sm transition active:scale-95">
+            <button type="submit" className="w-full rounded-lg bg-brand-lime px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-brand transition active:scale-95">
               Create room
             </button>
           </form>
 
-          <form onSubmit={joinRoom} className="rounded-lg bg-white p-3 shadow-sm">
-            <label className="block text-sm font-black uppercase tracking-wide text-pitch/70">
+          <form onSubmit={joinRoom} className="rounded-lg border border-brand-cream/10 bg-brand-panel/85 p-3 shadow-sm">
+            <label className="block text-sm font-black uppercase tracking-wide text-brand-cream/65">
               Room code
-              <input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase().slice(0, 5))} className="mt-2 w-full rounded-md border-0 bg-[#F4F7F1] px-4 py-4 text-center text-xl font-black tracking-[0.2em] text-ink" placeholder="ABCDE" maxLength={5} />
+              <input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase().slice(0, 5))} className="mt-2 w-full rounded-md border border-brand-cream/10 bg-brand-bg px-4 py-4 text-center text-xl font-black tracking-[0.2em] text-brand-cream" placeholder="ABCDE" maxLength={5} />
             </label>
-            <button type="submit" className="mt-3 w-full rounded-lg bg-pitch px-4 py-4 text-sm font-black uppercase text-line shadow-sm transition active:scale-95">
+            <button type="submit" className="mt-3 w-full rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-4 text-sm font-black uppercase text-brand-cream shadow-sm transition active:scale-95">
               Join room
             </button>
           </form>
@@ -329,18 +330,18 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
 
       {roomStatus === "lobby" ? (
         <section className="space-y-4">
-          <section className="rounded-lg bg-pitch p-5 text-line shadow-soft">
-            <p className="text-sm font-semibold text-line/70">Room code</p>
+          <section className="relative overflow-hidden rounded-lg border border-brand-cream/10 bg-brand-panel/90 p-5 text-brand-cream shadow-brand">
+            <p className="text-sm font-semibold text-brand-cream/70">Room code</p>
             <h2 className="mt-2 text-5xl font-black tracking-[0.18em]">{roomCode}</h2>
-            <p className="mt-3 text-sm font-semibold text-line/75">{message}</p>
+            <p className="mt-3 text-sm font-semibold text-brand-cream/75">{message}</p>
           </section>
 
           <Leaderboard players={players} />
 
           {isHost ? (
-            <label className="block text-sm font-black uppercase tracking-wide text-pitch/70">
+            <label className="block text-sm font-black uppercase tracking-wide text-brand-cream/65">
               Pick question
-              <select value={selectedQuestionId} onChange={(event) => setSelectedQuestionId(event.target.value)} className="mt-2 w-full rounded-md border-0 bg-white px-4 py-4 text-base font-bold normal-case tracking-normal text-ink shadow-sm">
+              <select value={selectedQuestionId} onChange={(event) => setSelectedQuestionId(event.target.value)} className="mt-2 w-full rounded-md border border-brand-cream/10 bg-brand-bg px-4 py-4 text-base font-bold normal-case tracking-normal text-brand-cream shadow-sm">
                 {questions.length === 0 ? <option value="">No questions in this category</option> : null}
                 {questions.map((roomQuestion) => (
                   <option key={roomQuestion.id} value={roomQuestion.id}>
@@ -348,21 +349,21 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
                   </option>
                 ))}
               </select>
-              <span className="mt-2 block text-xs font-bold normal-case tracking-normal text-pitch/55">
+              <span className="mt-2 block text-xs font-bold normal-case tracking-normal text-brand-cream/55">
                 Everyone will get this same list when you start the room.
               </span>
             </label>
           ) : (
-            <div className="rounded-lg bg-white px-4 py-4 text-sm font-bold text-ink/65 shadow-sm">
+            <div className="rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-4 text-sm font-bold text-brand-cream/65 shadow-sm">
               Waiting for the host to pick the question.
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={startRoom} disabled={!isHost || !selectedRoomQuestion} className="rounded-lg bg-coral px-4 py-4 text-sm font-black uppercase text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-45">
+            <button type="button" onClick={startRoom} disabled={!isHost || !selectedRoomQuestion} className="rounded-lg bg-brand-lime px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-brand transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-45">
               Start
             </button>
-            <button type="button" onClick={leaveRoom} className="rounded-lg bg-white px-4 py-4 text-sm font-black uppercase text-pitch shadow-sm transition active:scale-95">
+            <button type="button" onClick={leaveRoom} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-4 text-sm font-black uppercase text-brand-cream shadow-sm transition active:scale-95">
               Leave
             </button>
           </div>
@@ -371,38 +372,38 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
 
       {(roomStatus === "playing" || roomStatus === "finished") && question ? (
         <>
-          <section className="rounded-lg bg-pitch p-5 text-line shadow-soft">
+          <section className="relative overflow-hidden rounded-lg border border-brand-cream/10 bg-brand-panel/90 p-5 text-brand-cream shadow-brand">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-line/70">Room {roomCode}</p>
+                <p className="text-sm font-semibold text-brand-cream/70">Room {roomCode}</p>
                 <h2 className="mt-3 text-2xl font-black leading-tight">{question.title}</h2>
               </div>
-              <div className="rounded-lg bg-boot px-3 py-2 text-xl font-black text-ink">{guessesRemaining}</div>
+              <div className="rounded-lg bg-brand-gold px-3 py-2 text-xl font-black text-brand-bg">{guessesRemaining}</div>
             </div>
-            <p className="mt-4 text-sm leading-6 text-line/80">{question.hint}</p>
-            <div className="mt-6 grid grid-cols-2 gap-2 text-center text-xs font-black uppercase tracking-wide text-line/80">
-              <div className="rounded-lg bg-line/10 px-2 py-3"><span className="block text-lg text-line">{foundAnswerIds.length}/{question.answers.length}</span>Found</div>
-              <div className="rounded-lg bg-line/10 px-2 py-3"><span className="block text-lg text-line">{guessesRemaining}</span>Guesses</div>
+            <p className="mt-4 text-sm leading-6 text-brand-cream/80">{question.hint}</p>
+            <div className="mt-6 grid grid-cols-2 gap-2 text-center text-xs font-black uppercase tracking-wide text-brand-cream/80">
+              <div className="rounded-lg bg-brand-cream/10 px-2 py-3"><span className="block text-lg text-brand-cream">{foundAnswerIds.length}/{question.answers.length}</span>Found</div>
+              <div className="rounded-lg bg-brand-cream/10 px-2 py-3"><span className="block text-lg text-brand-cream">{guessesRemaining}</span>Guesses</div>
             </div>
           </section>
 
           <form onSubmit={submitGuess} className="sticky top-0 z-10 -mx-4 mt-5 bg-transparent px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">
-            <div className="flex gap-2 rounded-lg bg-white p-2 shadow-soft">
-              <input value={guess} onChange={(event) => setGuess(event.target.value)} disabled={roomStatus !== "playing"} placeholder={roomStatus === "playing" ? "Type an answer" : "Finished"} className="min-w-0 flex-1 rounded-md border-0 bg-[#F4F7F1] px-4 py-4 text-base font-semibold text-ink placeholder:text-ink/45 disabled:opacity-60" autoComplete="off" />
-              <button type="submit" disabled={roomStatus !== "playing"} className="min-w-20 rounded-md bg-coral px-4 py-3 text-sm font-black uppercase text-white transition active:scale-95 disabled:cursor-not-allowed disabled:bg-ink/25">
+            <div className="flex gap-2 rounded-lg bg-brand-panel p-2 shadow-brand">
+              <input value={guess} onChange={(event) => setGuess(event.target.value)} disabled={roomStatus !== "playing"} placeholder={roomStatus === "playing" ? "Type an answer" : "Finished"} className="min-w-0 flex-1 rounded-md border border-brand-cream/10 bg-brand-bg px-4 py-4 text-base font-semibold text-brand-cream placeholder:text-brand-cream/45 disabled:opacity-60" autoComplete="off" />
+              <button type="submit" disabled={roomStatus !== "playing"} className="min-w-20 rounded-md bg-brand-lime px-4 py-3 text-sm font-black uppercase text-brand-bg transition active:scale-95 disabled:cursor-not-allowed disabled:bg-brand-cream/20">
                 Guess
               </button>
             </div>
           </form>
 
-          <p className="min-h-7 px-1 text-sm font-bold text-pitch/80" aria-live="polite">{message}</p>
+          <p className="min-h-7 px-1 text-sm font-bold text-brand-cream/75" aria-live="polite">{message}</p>
 
           <section className="mt-4 grid grid-cols-2 gap-3">
             {question.answers.map((answer, index) => {
               const isFound = foundSet.has(answer.id);
               return (
-                <div key={answer.id} className={["min-h-16 rounded-lg border px-4 py-3 transition", isFound ? "border-pitch bg-white text-pitch shadow-sm" : roomStatus === "finished" ? "border-coral/40 bg-coral/10 text-ink/75" : "border-pitch/10 bg-white/72 text-ink/35"].join(" ")}>
-                  <p className="text-xs font-black uppercase text-ink/35">#{index + 1}</p>
+                <div key={answer.id} className={["min-h-16 rounded-lg border px-4 py-3 transition", isFound ? "border-brand-lime/60 bg-brand-lime/10 text-brand-cream shadow-brand answer-pop" : roomStatus === "finished" ? "border-brand-gold/40 bg-brand-gold/10 text-brand-cream/70" : "border-brand-cream/10 bg-brand-panel/70 text-brand-cream/35"].join(" ")}>
+                  <p className="text-xs font-black uppercase text-brand-cream/35">#{index + 1}</p>
                   <p className="mt-1 break-words text-sm font-black">{isFound || roomStatus === "finished" ? answer.label : "Hidden"}</p>
                 </div>
               );
@@ -412,10 +413,10 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
           <Leaderboard players={players} />
 
           <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
-            <button type="button" onClick={resetRoom} disabled={!isHost} className="rounded-lg bg-white px-4 py-4 text-sm font-black uppercase text-pitch shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-45">
+            <button type="button" onClick={resetRoom} disabled={!isHost} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-4 text-sm font-black uppercase text-brand-cream shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-45">
               Lobby
             </button>
-            <button type="button" onClick={leaveRoom} className="rounded-lg bg-pitch px-4 py-4 text-sm font-black uppercase text-line shadow-sm transition active:scale-95">
+            <button type="button" onClick={leaveRoom} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-4 text-sm font-black uppercase text-brand-cream shadow-sm transition active:scale-95">
               Leave
             </button>
           </div>
@@ -428,17 +429,17 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
 function Leaderboard({ players }: { players: PlayerPresence[] }) {
   return (
     <section className="mt-5">
-      <h2 className="text-sm font-black uppercase tracking-[0.18em] text-pitch/65">Live leaderboard</h2>
+      <h2 className="text-sm font-black uppercase tracking-[0.18em] text-brand-lime/75">Live leaderboard</h2>
       <div className="mt-2 space-y-2">
         {players.length === 0 ? (
-          <div className="rounded-lg bg-white px-4 py-4 text-sm font-bold text-ink/60 shadow-sm">Waiting for players</div>
+          <div className="rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-4 text-sm font-bold text-brand-cream/60 shadow-sm">Waiting for players</div>
         ) : (
           players.map((player, index) => (
-            <div key={player.clientId} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 rounded-lg bg-white px-4 py-3 shadow-sm">
-              <span className="text-sm font-black text-ink/35">#{index + 1}</span>
-              <span className="min-w-0 truncate text-sm font-black text-pitch">{player.username}</span>
-              <span className="text-sm font-bold text-ink/70">{player.correctCount} correct</span>
-              <span className="text-sm font-bold text-ink/70">{player.guessesRemaining} left</span>
+            <div key={player.clientId} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-3 shadow-sm">
+              <span className="text-sm font-black text-brand-cream/35">#{index + 1}</span>
+              <span className="min-w-0 truncate text-sm font-black text-brand-cream">{player.username}</span>
+              <span className="text-sm font-bold text-brand-cream/65">{player.correctCount} correct</span>
+              <span className="text-sm font-bold text-brand-cream/65">{player.guessesRemaining} left</span>
             </div>
           ))
         )}
