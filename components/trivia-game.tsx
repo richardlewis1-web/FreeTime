@@ -225,6 +225,14 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   const result = isGameOver ? buildResult(question, foundAnswerIds, wrongGuesses, liveScore) : null;
 
   useEffect(() => {
+    const roomFromLink = new URLSearchParams(window.location.search).get("room");
+
+    if (roomFromLink) {
+      setViewMode("rooms");
+    }
+  }, []);
+
+  useEffect(() => {
     const savedName = window.localStorage.getItem(PLAYER_NAME_KEY);
     const savedScores = window.localStorage.getItem(LEADERBOARD_KEY);
     const savedQuestions = window.localStorage.getItem(CUSTOM_QUESTIONS_KEY);

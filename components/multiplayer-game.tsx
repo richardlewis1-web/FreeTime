@@ -65,6 +65,7 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
   const [foundAnswerIds, setFoundAnswerIds] = useState<string[]>([]);
   const [wrongGuesses, setWrongGuesses] = useState<string[]>([]);
   const [message, setMessage] = useState("Create or join a room to start.");
+  const roomLink = roomCode ? `${typeof window !== "undefined" ? window.location.origin + window.location.pathname : ""}?room=${roomCode}` : "";
 
   const foundSet = useMemo(() => new Set(foundAnswerIds), [foundAnswerIds]);
   const selectedRoomQuestion = useMemo(
@@ -83,6 +84,15 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
     }),
     [clientId, foundAnswerIds.length, guessesRemaining, roomStatus, username]
   );
+
+  useEffect(() => {
+    const roomFromLink = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase().slice(0, 5);
+
+    if (roomFromLink) {
+      setJoinCode(roomFromLink);
+      setMessage("Room link loaded. Add your name and join.");
+    }
+  }, []);
 
   useEffect(() => {
     if (!questions.some((roomQuestion) => roomQuestion.id === selectedQuestionId)) {
@@ -181,6 +191,9 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
         if (status === "SUBSCRIBED") {
           channelRef.current = channel;
           setRoomCode(cleanRoomCode);
+          if (host) {
+            window.history.replaceState(null, "", `?room=${cleanRoomCode}`);
+          }
           setUsername(nextUsername.trim());
           setIsHost(host);
           setRoomStatus("lobby");
@@ -198,6 +211,25 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
   function joinRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     connectToRoom(joinCode, username, false);
+  }
+
+  async function shareRoomLink() {
+    if (!roomLink) {
+      return;
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Join my Free Time room", text: `Join my Free Time room: ${roomCode}`, url: roomLink });
+        setMessage("Room link shared.");
+        return;
+      }
+
+      await navigator.clipboard.writeText(roomLink);
+      setMessage("Room link copied. Send it to your mates.");
+    } catch {
+      setMessage("Could not copy the link. You can still share the room code.");
+    }
   }
 
   function startRoom() {
@@ -221,6 +253,7 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
       channelRef.current = null;
     }
 
+    window.history.replaceState(null, "", window.location.pathname);
     setRoomStatus("setup");
     setRoomCode("");
     setJoinCode("");
@@ -333,6 +366,14 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
           <section className="relative overflow-hidden rounded-lg border border-brand-cream/10 bg-brand-panel/90 p-5 text-brand-cream shadow-brand">
             <p className="text-sm font-semibold text-brand-cream/70">Room code</p>
             <h2 className="mt-2 text-5xl font-black tracking-[0.18em]">{roomCode}</h2>
+            {roomLink ? (
+              <div className="mt-4 rounded-lg border border-brand-lime/20 bg-brand-bg/70 p-3">
+                <p className="break-all text-xs font-bold text-brand-cream/65">{roomLink}</p>
+                <button type="button" onClick={shareRoomLink} className="mt-3 w-full rounded-lg bg-brand-lime px-4 py-3 text-sm font-black uppercase text-brand-bg shadow-brand transition active:scale-95">
+                  Copy room link
+                </button>
+              </div>
+            ) : null}
             <p className="mt-3 text-sm font-semibold text-brand-cream/75">{message}</p>
           </section>
 
