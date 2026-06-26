@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Logo } from "@/components/brand/logo";
 import { MultiplayerGame } from "@/components/multiplayer-game";
 import { getCategoryMeta } from "@/lib/categories";
+import { supabase } from "@/lib/supabase";
 import type { GameResult, RarityLabel, TriviaAnswer, TriviaDifficulty, TriviaQuestion } from "@/lib/types";
 
 type GuessResult = "correct" | "duplicate" | "wrong" | "empty";
@@ -21,6 +22,19 @@ type LeaderboardEntry = {
   questionTitle: string;
   category: string;
   createdAt: string;
+};
+
+type LeaderboardScoreRow = {
+  id: string;
+  player_name: string;
+  score: number;
+  found_count: number;
+  total_answers: number;
+  accuracy: number;
+  guesses_used: number;
+  question_title: string;
+  category: string;
+  created_at: string;
 };
 
 const CUSTOM_QUESTIONS_KEY = "free-time-custom-questions";
@@ -152,6 +166,21 @@ function sortLeaderboard(entries: LeaderboardEntry[]) {
   return [...entries].sort((a, b) => b.score - a.score || b.accuracy - a.accuracy || b.foundCount - a.foundCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+function mapLeaderboardRow(row: LeaderboardScoreRow): LeaderboardEntry {
+  return {
+    id: row.id,
+    playerName: row.player_name,
+    score: row.score,
+    foundCount: row.found_count,
+    totalAnswers: row.total_answers,
+    accuracy: row.accuracy,
+    guessesUsed: row.guesses_used,
+    questionTitle: row.question_title,
+    category: row.category,
+    createdAt: row.created_at
+  };
+}
+
 function cleanPlayerName(value: string) {
   return value.trim().replace(/\s+/g, " ").slice(0, 18);
 }
@@ -263,6 +292,32 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   }, []);
 
   useEffect(() => {
+    async function loadLeaderboard() {
+      if (!supabase) {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("leaderboard_scores")
+        .select("id,player_name,score,found_count,total_answers,accuracy,guesses_used,question_title,category,created_at")
+        .order("score", { ascending: false })
+        .order("accuracy", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(25);
+
+      if (error || !data) {
+        return;
+      }
+
+      const remoteLeaderboard = sortLeaderboard((data as LeaderboardScoreRow[]).map(mapLeaderboardRow)).slice(0, 25);
+      setLeaderboard(remoteLeaderboard);
+      window.localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(remoteLeaderboard));
+    }
+
+    loadLeaderboard();
+  }, []);
+
+  useEffect(() => {
     const cleanName = cleanPlayerName(playerName);
 
     if (cleanName) {
@@ -309,6 +364,44 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
 
       return nextLeaderboard;
     });
+
+    if (supabase) {
+      supabase
+        .from("leaderboard_scores")
+        .insert({
+          player_name: entry.playerName,
+          score: entry.score,
+          found_count: entry.foundCount,
+          total_answers: entry.totalAnswers,
+          accuracy: entry.accuracy,
+          guesses_used: entry.guessesUsed,
+          question_title: entry.questionTitle,
+          question_id: question.id,
+          category: entry.category
+        })
+        .select("id,player_name,score,found_count,total_answers,accuracy,guesses_used,question_title,category,created_at")
+        .then(({ data, error }) => {
+          if (error || !data) {
+            return;
+          }
+
+          const [savedScore] = data as LeaderboardScoreRow[];
+
+          if (!savedScore) {
+            return;
+          }
+
+          const savedEntry = mapLeaderboardRow(savedScore);
+
+          setLeaderboard((current) => {
+            const withoutLocalEntry = current.filter((candidate) => candidate.id !== entry.id);
+            const nextLeaderboard = sortLeaderboard([savedEntry, ...withoutLocalEntry]).slice(0, 25);
+            window.localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(nextLeaderboard));
+            return nextLeaderboard;
+          });
+        });
+    }
+
     setSavedResultKey(resultKey);
   }, [playerName, question.category, question.id, question.title, result, savedResultKey, status]);
 
@@ -942,7 +1035,7 @@ function LeaderboardPanel({ playerName, entries, onClear }: { playerName: string
           <p className="mt-1 text-xs font-bold text-brand-cream/55">{playerName ? "Saved under " + playerName : "Add a name before playing to save your score."}</p>
         </div>
         <button type="button" onClick={onClear} disabled={entries.length === 0} className="rounded-md border border-brand-cream/10 px-3 py-2 text-xs font-black uppercase text-brand-cream/70 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35">
-          Clear
+          Clear local
         </button>
       </div>
 

@@ -50,6 +50,10 @@ function makeClientId() {
   return "player-" + Date.now() + "-" + Math.random().toString(16).slice(2);
 }
 
+function isMissingRoomsTableError(message: string) {
+  return message.toLowerCase().includes("public.rooms") || message.toLowerCase().includes("schema cache") || message.toLowerCase().includes("could not find the table");
+}
+
 function flattenPresence(state: Record<string, PlayerPresence[]>) {
   return Object.values(state)
     .flat()
@@ -141,6 +145,11 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
     const { data, error } = await supabase.from("rooms").select("code,status,question,selected_question_id").eq("code", code).maybeSingle();
 
     if (error) {
+      if (isMissingRoomsTableError(error.message)) {
+        setMessage("Room storage is not ready yet. You can still join live rooms with the code.");
+        return null;
+      }
+
       setMessage("Could not load that room yet. Check the room code and try again.");
       return null;
     }
@@ -165,6 +174,11 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
     );
 
     if (error) {
+      if (isMissingRoomsTableError(error.message)) {
+        setMessage("Room created. Share the code. Persistent room storage still needs the Supabase SQL update.");
+        return true;
+      }
+
       setMessage(`Could not save room state: ${error.message}`);
       return false;
     }
