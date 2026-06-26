@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { localQuestions } from "./local-questions";
 import { supabase } from "./supabase";
 import type { RarityLabel, TriviaDifficulty, TriviaQuestion } from "./types";
@@ -73,6 +74,7 @@ function mapQuestion(row: QuestionRow): TriviaQuestion {
 }
 
 export async function getQuestions(): Promise<TriviaQuestion[]> {
+  noStore();
   if (!supabase) {
     return localQuestions;
   }

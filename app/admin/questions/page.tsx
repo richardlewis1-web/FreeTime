@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Logo } from "@/components/brand/logo";
 import { footballCategories } from "@/lib/categories";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -51,12 +51,22 @@ export default function AdminQuestionsPage() {
   const [maxGuesses, setMaxGuesses] = useState(5);
   const [answers, setAnswers] = useState<AnswerDraft[]>([{ ...blankAnswer }, { ...blankAnswer }, { ...blankAnswer }]);
   const [status, setStatus] = useState("Loading categories...");
+  const [questionCount, setQuestionCount] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const readyToSave = useMemo(
     () => Boolean(isSupabaseConfigured && categoryId && title.trim() && answers.some((answer) => answer.label.trim())),
     [answers, categoryId, title]
   );
+
+  const refreshQuestionCount = useCallback(async () => {
+    if (!supabase) {
+      return;
+    }
+
+    const { count } = await supabase.from("questions").select("id", { count: "exact", head: true });
+    setQuestionCount(count ?? 0);
+  }, []);
 
   useEffect(() => {
     async function loadCategories() {
@@ -79,10 +89,11 @@ export default function AdminQuestionsPage() {
       setCategories(rows);
       setCategoryId(rows[0]?.id ?? "");
       setStatus(rows.length ? "Ready to add a question." : "No categories found. Run the Supabase SQL first.");
+      await refreshQuestionCount();
     }
 
     loadCategories();
-  }, []);
+  }, [refreshQuestionCount]);
 
   async function seedCategories() {
     if (!supabase) {
@@ -207,6 +218,7 @@ export default function AdminQuestionsPage() {
     setDifficulty("medium");
     setMaxGuesses(5);
     setAnswers([{ ...blankAnswer }, { ...blankAnswer }, { ...blankAnswer }]);
+    await refreshQuestionCount();
     setStatus("Question saved. It should now appear in the game.");
     setIsSaving(false);
   }
@@ -225,6 +237,11 @@ export default function AdminQuestionsPage() {
 
         <section className="rounded-lg border border-brand-lime/20 bg-brand-panel/85 p-4">
           <p className="text-sm font-bold text-brand-cream/80">{status}</p>
+          {questionCount !== null ? (
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.16em] text-brand-lime/75">
+              {questionCount} questions in Supabase
+            </p>
+          ) : null}
           {!categories.length ? (
             <button
               type="button"
