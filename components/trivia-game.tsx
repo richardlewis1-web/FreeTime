@@ -696,7 +696,7 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
               </div>
             </div>
             <button type="button" onClick={() => startSpecificQuestion(dailyQuestion, "Question of the day loaded. Start naming.")} className="relative mt-4 w-full rounded-lg bg-brand-gold px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-sm transition active:scale-95">
-              Play today's question
+              Play today&apos;s question
             </button>
           </div>
         </section>

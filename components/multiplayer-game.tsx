@@ -67,13 +67,16 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
   const foundSet = useMemo(() => new Set(foundAnswerIds), [foundAnswerIds]);
   const guessesRemaining = question ? question.maxGuesses - wrongGuesses.length : 0;
   const isGameOver = roomStatus === "finished" || Boolean(question && (foundAnswerIds.length === question.answers.length || guessesRemaining <= 0));
-  const selfPresence: PlayerPresence = {
-    clientId,
-    username: username.trim() || "Player",
-    correctCount: foundAnswerIds.length,
-    guessesRemaining: Math.max(0, guessesRemaining),
-    status: roomStatus === "playing" ? "playing" : roomStatus === "finished" ? "finished" : "lobby"
-  };
+  const selfPresence: PlayerPresence = useMemo(
+    () => ({
+      clientId,
+      username: username.trim() || "Player",
+      correctCount: foundAnswerIds.length,
+      guessesRemaining: Math.max(0, guessesRemaining),
+      status: roomStatus === "playing" ? "playing" : roomStatus === "finished" ? "finished" : "lobby"
+    }),
+    [clientId, foundAnswerIds.length, guessesRemaining, roomStatus, username]
+  );
 
   useEffect(() => {
     if (!isGameOver || roomStatus !== "playing") {
@@ -91,7 +94,7 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
 
     channelRef.current.track(selfPresence);
     channelRef.current.send({ type: "broadcast", event: "room-event", payload: { type: "score-update", player: selfPresence } satisfies BroadcastPayload });
-  }, [foundAnswerIds.length, guessesRemaining, roomStatus]);
+  }, [selfPresence, roomStatus]);
 
   useEffect(() => {
     return () => {
