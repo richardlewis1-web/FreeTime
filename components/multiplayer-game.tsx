@@ -59,12 +59,17 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
   const [isHost, setIsHost] = useState(false);
   const [players, setPlayers] = useState<PlayerPresence[]>([]);
   const [question, setQuestion] = useState<TriviaQuestion | null>(null);
+  const [selectedQuestionId, setSelectedQuestionId] = useState(questions[0]?.id ?? "");
   const [guess, setGuess] = useState("");
   const [foundAnswerIds, setFoundAnswerIds] = useState<string[]>([]);
   const [wrongGuesses, setWrongGuesses] = useState<string[]>([]);
   const [message, setMessage] = useState("Create or join a room to start.");
 
   const foundSet = useMemo(() => new Set(foundAnswerIds), [foundAnswerIds]);
+  const selectedRoomQuestion = useMemo(
+    () => questions.find((roomQuestion) => roomQuestion.id === selectedQuestionId) ?? questions[0] ?? null,
+    [questions, selectedQuestionId]
+  );
   const guessesRemaining = question ? question.maxGuesses - wrongGuesses.length : 0;
   const isGameOver = roomStatus === "finished" || Boolean(question && (foundAnswerIds.length === question.answers.length || guessesRemaining <= 0));
   const selfPresence: PlayerPresence = useMemo(
@@ -77,6 +82,12 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
     }),
     [clientId, foundAnswerIds.length, guessesRemaining, roomStatus, username]
   );
+
+  useEffect(() => {
+    if (!questions.some((roomQuestion) => roomQuestion.id === selectedQuestionId)) {
+      setSelectedQuestionId(questions[0]?.id ?? "");
+    }
+  }, [questions, selectedQuestionId]);
 
   useEffect(() => {
     if (!isGameOver || roomStatus !== "playing") {
@@ -193,7 +204,7 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
       return;
     }
 
-    const nextQuestion = questions[Math.floor(Math.random() * questions.length)];
+    const nextQuestion = selectedRoomQuestion;
 
     if (!nextQuestion) {
       setMessage("No questions in this category.");
@@ -282,6 +293,18 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
           </section>
 
           <label className="block text-sm font-black uppercase tracking-wide text-pitch/70">
+            Host question
+            <select value={selectedQuestionId} onChange={(event) => setSelectedQuestionId(event.target.value)} className="mt-2 w-full rounded-md border-0 bg-white px-4 py-4 text-base font-bold normal-case tracking-normal text-ink shadow-sm">
+              {questions.length === 0 ? <option value="">No questions in this category</option> : null}
+              {questions.map((roomQuestion) => (
+                <option key={roomQuestion.id} value={roomQuestion.id}>
+                  {roomQuestion.title}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm font-black uppercase tracking-wide text-pitch/70">
             Username
             <input value={username} onChange={(event) => setUsername(event.target.value)} className="mt-2 w-full rounded-md border-0 bg-white px-4 py-4 text-base font-bold normal-case tracking-normal text-ink shadow-sm" placeholder="Your name" />
           </label>
@@ -314,8 +337,29 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
 
           <Leaderboard players={players} />
 
+          {isHost ? (
+            <label className="block text-sm font-black uppercase tracking-wide text-pitch/70">
+              Pick question
+              <select value={selectedQuestionId} onChange={(event) => setSelectedQuestionId(event.target.value)} className="mt-2 w-full rounded-md border-0 bg-white px-4 py-4 text-base font-bold normal-case tracking-normal text-ink shadow-sm">
+                {questions.length === 0 ? <option value="">No questions in this category</option> : null}
+                {questions.map((roomQuestion) => (
+                  <option key={roomQuestion.id} value={roomQuestion.id}>
+                    {roomQuestion.title}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-2 block text-xs font-bold normal-case tracking-normal text-pitch/55">
+                Everyone will get this same list when you start the room.
+              </span>
+            </label>
+          ) : (
+            <div className="rounded-lg bg-white px-4 py-4 text-sm font-bold text-ink/65 shadow-sm">
+              Waiting for the host to pick the question.
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={startRoom} disabled={!isHost} className="rounded-lg bg-coral px-4 py-4 text-sm font-black uppercase text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-45">
+            <button type="button" onClick={startRoom} disabled={!isHost || !selectedRoomQuestion} className="rounded-lg bg-coral px-4 py-4 text-sm font-black uppercase text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-45">
               Start
             </button>
             <button type="button" onClick={leaveRoom} className="rounded-lg bg-white px-4 py-4 text-sm font-black uppercase text-pitch shadow-sm transition active:scale-95">
