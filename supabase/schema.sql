@@ -50,10 +50,22 @@ create index if not exists questions_active_created_idx on public.questions(acti
 create index if not exists answers_question_rank_idx on public.answers(question_id, rank);
 create index if not exists aliases_answer_id_idx on public.aliases(answer_id);
 
+create table if not exists public.rooms (
+  code text primary key check (char_length(code) = 5),
+  status text not null default 'lobby' check (status in ('lobby', 'playing', 'finished')),
+  question jsonb,
+  selected_question_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists rooms_updated_at_idx on public.rooms(updated_at desc);
+
 alter table public.categories enable row level security;
 alter table public.questions enable row level security;
 alter table public.answers enable row level security;
 alter table public.aliases enable row level security;
+alter table public.rooms enable row level security;
 
 -- No auth yet: public read/write policies for the anon key.
 -- Tighten these when authentication is added.
@@ -104,7 +116,19 @@ begin
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'aliases' and policyname = 'Public aliases delete') then
     create policy "Public aliases delete" on public.aliases for delete using (true);
   end if;
-end $$;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'rooms' and policyname = 'Public rooms read') then
+    create policy "Public rooms read" on public.rooms for select using (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'rooms' and policyname = 'Public rooms insert') then
+    create policy "Public rooms insert" on public.rooms for insert with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'rooms' and policyname = 'Public rooms update') then
+    create policy "Public rooms update" on public.rooms for update using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'rooms' and policyname = 'Public rooms delete') then
+    create policy "Public rooms delete" on public.rooms for delete using (true);
+  end if;
+end $;
 
 insert into public.categories (slug, name, description, difficulty_vibe, icon, sort_order)
 values

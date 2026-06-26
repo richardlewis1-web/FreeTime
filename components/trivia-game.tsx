@@ -26,6 +26,7 @@ type LeaderboardEntry = {
 const CUSTOM_QUESTIONS_KEY = "free-time-custom-questions";
 const PLAYER_NAME_KEY = "free-time-player-name";
 const LEADERBOARD_KEY = "free-time-leaderboard";
+const COMPLETED_QUESTIONS_KEY = "free-time-completed-questions";
 const rarityScores: Record<RarityLabel, number> = {
   "Tap-in": 10,
   Solid: 25,
@@ -211,6 +212,7 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   const [builderMessage, setBuilderMessage] = useState("Add at least one answer to save a question.");
   const [playerName, setPlayerName] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [completedQuestionIds, setCompletedQuestionIds] = useState<string[]>([]);
   const [savedResultKey, setSavedResultKey] = useState("");
 
   const question = categoryQuestions[questionIndex] ?? categoryQuestions[0] ?? playableQuestions[0];
@@ -236,6 +238,7 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     const savedName = window.localStorage.getItem(PLAYER_NAME_KEY);
     const savedScores = window.localStorage.getItem(LEADERBOARD_KEY);
     const savedQuestions = window.localStorage.getItem(CUSTOM_QUESTIONS_KEY);
+    const savedCompletedQuestions = window.localStorage.getItem(COMPLETED_QUESTIONS_KEY);
 
     if (savedName) {
       setPlayerName(savedName);
@@ -250,6 +253,18 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
         }
       } catch {
         window.localStorage.removeItem(LEADERBOARD_KEY);
+      }
+    }
+
+    if (savedCompletedQuestions) {
+      try {
+        const parsedCompletedQuestions = JSON.parse(savedCompletedQuestions) as string[];
+
+        if (Array.isArray(parsedCompletedQuestions)) {
+          setCompletedQuestionIds(parsedCompletedQuestions.filter((id) => typeof id === "string"));
+        }
+      } catch {
+        window.localStorage.removeItem(COMPLETED_QUESTIONS_KEY);
       }
     }
 
@@ -364,6 +379,22 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     }
   }, [guessesRemaining, status]);
 
+  useEffect(() => {
+    if (status === "playing" || !question?.id) {
+      return;
+    }
+
+    setCompletedQuestionIds((current) => {
+      if (current.includes(question.id)) {
+        return current;
+      }
+
+      const nextCompleted = [...current, question.id];
+      window.localStorage.setItem(COMPLETED_QUESTIONS_KEY, JSON.stringify(nextCompleted));
+      return nextCompleted;
+    });
+  }, [question?.id, status]);
+
   function checkGuess(rawGuess: string): GuessResult {
     const cleanedGuess = normalize(rawGuess);
 
@@ -420,8 +451,45 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setMessage("Type an answer first.");
   }
 
+  function isQuestionCompleted(candidate: TriviaQuestion | undefined) {
+    return Boolean(candidate && completedQuestionIds.includes(candidate.id));
+  }
+
+  function findNextUnplayedIndex(startIndex: number, direction: 1 | -1) {
+    if (categoryQuestions.length === 0) {
+      return 0;
+    }
+
+    for (let offset = 0; offset < categoryQuestions.length; offset += 1) {
+      const candidateIndex = (startIndex + offset * direction + categoryQuestions.length) % categoryQuestions.length;
+
+      if (!isQuestionCompleted(categoryQuestions[candidateIndex])) {
+        return candidateIndex;
+      }
+    }
+
+    return -1;
+  }
+
   function startQuestion(nextIndex: number) {
     const nextQuestion = categoryQuestions[nextIndex];
+
+    if (!nextQuestion) {
+      return;
+    }
+
+    if (isQuestionCompleted(nextQuestion)) {
+      const nextUnplayedIndex = findNextUnplayedIndex(nextIndex, 1);
+
+      if (nextUnplayedIndex === -1) {
+        setMessage("No unplayed lists left in this category.");
+        return;
+      }
+
+      startQuestion(nextUnplayedIndex);
+      return;
+    }
+
     setQuestionIndex(nextIndex);
     setGuess("");
     setFoundAnswerIds([]);
@@ -434,6 +502,11 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   }
 
   function startSpecificQuestion(targetQuestion: TriviaQuestion, nextMessage = "Question loaded. Start naming.") {
+    if (isQuestionCompleted(targetQuestion)) {
+      setMessage("That list has already been played in solo. Pick another one.");
+      return;
+    }
+
     const nextCategory = targetQuestion.category;
     const nextCategoryQuestions = nextCategory === "All" ? playableQuestions : playableQuestions.filter((candidate) => candidate.category === nextCategory);
     const nextIndex = Math.max(0, nextCategoryQuestions.findIndex((candidate) => candidate.id === targetQuestion.id));
@@ -451,21 +524,47 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   }
 
   function moveQuestion(direction: 1 | -1) {
-    startQuestion((questionIndex + direction + categoryQuestions.length) % categoryQuestions.length);
+    const nextIndex = findNextUnplayedIndex((questionIndex + direction + categoryQuestions.length) % categoryQuestions.length, direction);
+
+    if (nextIndex === -1) {
+      setMessage("No unplayed lists left in this category.");
+      return;
+    }
+
+    startQuestion(nextIndex);
   }
 
-  function resetQuestion() {
-    startQuestion(questionIndex);
-    setMessage("Clean slate. Have another go.");
-  }
 
   function revealAnswers() {
     setStatus("revealed");
     setMessage("Full-time whistle. Let's see the damage.");
   }
 
+  useEffect(() => {
+    if (status !== "playing" || completedQuestionIds.length === 0 || !completedQuestionIds.includes(question.id)) {
+      return;
+    }
+
+    const nextUnplayedIndex = categoryQuestions.findIndex((candidate) => !completedQuestionIds.includes(candidate.id));
+
+    if (nextUnplayedIndex === -1) {
+      setMessage("No unplayed lists left in this category.");
+      return;
+    }
+
+    const nextQuestion = categoryQuestions[nextUnplayedIndex];
+    setQuestionIndex(nextUnplayedIndex);
+    setGuess("");
+    setFoundAnswerIds([]);
+    setWrongGuesses([]);
+    setTimeLeft(getQuestionTimeLimit(nextQuestion));
+    setSavedResultKey("");
+    setMessage("Skipping lists you've already played.");
+  }, [categoryQuestions, completedQuestionIds, question.id, status]);
+
   function selectCategory(categoryOption: string) {
-    const nextQuestion = categoryOption === "All" ? playableQuestions[0] : playableQuestions.find((candidate) => candidate.category === categoryOption);
+    const categoryPool = categoryOption === "All" ? playableQuestions : playableQuestions.filter((candidate) => candidate.category === categoryOption);
+    const nextQuestion = categoryPool.find((candidate) => !isQuestionCompleted(candidate)) ?? categoryPool[0];
 
     setSelectedCategory(categoryOption);
     setQuestionIndex(0);
@@ -473,12 +572,14 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setFoundAnswerIds([]);
     setWrongGuesses([]);
 
-    if (nextQuestion) {
+    if (nextQuestion && !isQuestionCompleted(nextQuestion)) {
       setTimeLeft(getQuestionTimeLimit(nextQuestion));
+      setStatus("playing");
+      setMessage("Category selected. Start naming.");
+      return;
     }
 
-    setStatus("playing");
-    setMessage("Category selected. Start naming.");
+    setMessage("No unplayed lists left in this category.");
   }
 
   function updateDraftAnswer(index: number, field: keyof DraftAnswer, value: string) {
@@ -787,20 +888,17 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
       <p className="min-h-7 px-1 text-sm font-bold text-brand-gold" aria-live="polite">{message}</p>
 
       {result ? (
-        <ResultsScreen result={result} playerName={cleanPlayerName(playerName)} leaderboard={leaderboard} onClearLeaderboard={clearLeaderboard} onReset={resetQuestion} onNext={() => moveQuestion(1)} />
+        <ResultsScreen result={result} playerName={cleanPlayerName(playerName)} leaderboard={leaderboard} onClearLeaderboard={clearLeaderboard} onNext={() => moveQuestion(1)} />
       ) : (
         <AnswerGrid answers={question.answers} foundSet={foundSet} reveal={false} />
       )}
 
-      <nav className="mt-auto grid grid-cols-4 gap-2 pt-8">
+      <nav className="mt-auto grid grid-cols-3 gap-2 pt-8">
         <button type="button" onClick={() => moveQuestion(-1)} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-3 py-4 text-sm font-black text-brand-cream shadow-sm transition active:scale-95">
           Prev
         </button>
-        <button type="button" onClick={resetQuestion} className="rounded-lg bg-brand-pitch px-3 py-4 text-sm font-black text-brand-cream shadow-sm transition active:scale-95">
-          Reset
-        </button>
-        <button type="button" onClick={revealAnswers} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-3 py-4 text-sm font-black text-brand-cream shadow-sm transition active:scale-95">
-          Results
+        <button type="button" onClick={revealAnswers} disabled={isGameOver} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-3 py-4 text-sm font-black text-brand-cream shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-45">
+          End round
         </button>
         <button type="button" onClick={() => moveQuestion(1)} className="rounded-lg bg-brand-lime px-3 py-4 text-sm font-black text-brand-bg shadow-brand transition active:scale-95">
           Next
@@ -836,7 +934,7 @@ function AnswerGrid({ answers, foundSet, reveal }: { answers: TriviaAnswer[]; fo
   );
 }
 
-function ResultsScreen({ result, playerName, leaderboard, onClearLeaderboard, onReset, onNext }: { result: GameResult; playerName: string; leaderboard: LeaderboardEntry[]; onClearLeaderboard: () => void; onReset: () => void; onNext: () => void }) {
+function ResultsScreen({ result, playerName, leaderboard, onClearLeaderboard, onNext }: { result: GameResult; playerName: string; leaderboard: LeaderboardEntry[]; onClearLeaderboard: () => void; onNext: () => void }) {
   return (
     <section className="mt-5 space-y-4">
       <section className="relative overflow-hidden rounded-lg border border-brand-lime/25 bg-brand-panel p-5 text-brand-cream shadow-brand">
@@ -873,14 +971,14 @@ function ResultsScreen({ result, playerName, leaderboard, onClearLeaderboard, on
         <AnswerList answers={result.missedAnswers} empty="None missed. Cold finish." />
       </section>
 
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={onReset} className="rounded-lg border border-brand-cream/10 bg-brand-panel px-4 py-4 text-sm font-black uppercase text-brand-cream shadow-sm transition active:scale-95">
-          Run it back
-        </button>
-        <button type="button" onClick={onNext} className="rounded-lg bg-brand-lime px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-brand transition active:scale-95">
-          Next list
-        </button>
+      <div className="rounded-lg border border-brand-gold/25 bg-brand-gold/10 p-4">
+        <p className="text-sm font-black uppercase tracking-[0.16em] text-brand-gold">One shot only</p>
+        <p className="mt-2 text-sm font-semibold text-brand-cream/70">No run-backs in solo. The match report is final.</p>
       </div>
+
+      <button type="button" onClick={onNext} className="w-full rounded-lg bg-brand-lime px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-brand transition active:scale-95">
+        Next list
+      </button>
     </section>
   );
 }

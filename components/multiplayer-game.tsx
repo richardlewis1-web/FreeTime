@@ -7,6 +7,13 @@ import { supabase } from "@/lib/supabase";
 import type { TriviaQuestion } from "@/lib/types";
 
 type RoomStatus = "setup" | "lobby" | "playing" | "finished";
+type PersistedRoomStatus = "lobby" | "playing" | "finished";
+type RoomRow = {
+  code: string;
+  status: PersistedRoomStatus;
+  question: TriviaQuestion | null;
+  selected_question_id: string | null;
+};
 type PlayerPresence = {
   clientId: string;
   username: string;
@@ -126,7 +133,46 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
     };
   }, []);
 
-  function connectToRoom(nextRoomCode: string, nextUsername: string, host: boolean) {
+  async function loadPersistedRoom(code: string) {
+    if (!supabase) {
+      return null;
+    }
+
+    const { data, error } = await supabase.from("rooms").select("code,status,question,selected_question_id").eq("code", code).maybeSingle();
+
+    if (error) {
+      setMessage("Could not load that room yet. Check the room code and try again.");
+      return null;
+    }
+
+    return (data as RoomRow | null) ?? null;
+  }
+
+  async function savePersistedRoom(code: string, nextStatus: PersistedRoomStatus, nextQuestion: TriviaQuestion | null, nextSelectedQuestionId: string | null) {
+    if (!supabase) {
+      return false;
+    }
+
+    const { error } = await supabase.from("rooms").upsert(
+      {
+        code,
+        status: nextStatus,
+        question: nextQuestion,
+        selected_question_id: nextSelectedQuestionId,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "code" }
+    );
+
+    if (error) {
+      setMessage(`Could not save room state: ${error.message}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function connectToRoom(nextRoomCode: string, nextUsername: string, host: boolean) {
     if (!supabase) {
       setMessage("Supabase is not configured yet. Add your env vars to use rooms.");
       return;
@@ -147,6 +193,8 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
       setMessage("Enter a 5-character room code.");
       return;
     }
+
+    const persistedRoom = host ? null : await loadPersistedRoom(cleanRoomCode);
 
     const channel = supabase.channel("free-time-room-" + cleanRoomCode, {
       config: {
@@ -194,10 +242,29 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
           if (host) {
             window.history.replaceState(null, "", `?room=${cleanRoomCode}`);
           }
+          if (host) {
+            await savePersistedRoom(cleanRoomCode, "lobby", null, selectedRoomQuestion?.id ?? null);
+          }
+
           setUsername(nextUsername.trim());
           setIsHost(host);
-          setRoomStatus("lobby");
-          setMessage(host ? "Room created. Share the code." : "Joined room. Waiting in lobby.");
+
+          if (!host && persistedRoom?.status === "playing" && persistedRoom.question) {
+            setQuestion(persistedRoom.question);
+            setSelectedQuestionId(persistedRoom.selected_question_id ?? persistedRoom.question.id);
+            setFoundAnswerIds([]);
+            setWrongGuesses([]);
+            setRoomStatus("playing");
+            setMessage("Joined the room. The list is already live.");
+          } else {
+            if (!host && persistedRoom?.selected_question_id) {
+              setSelectedQuestionId(persistedRoom.selected_question_id);
+            }
+
+            setRoomStatus("lobby");
+            setMessage(host ? "Room created. Share the link." : "Joined room. Waiting in lobby.");
+          }
+
           await channel.track({ clientId, username: nextUsername.trim(), correctCount: 0, guessesRemaining: 0, status: "lobby" } satisfies PlayerPresence);
         }
       });
@@ -232,7 +299,7 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
     }
   }
 
-  function startRoom() {
+  async function startRoom() {
     if (!channelRef.current || !isHost) {
       return;
     }
@@ -243,6 +310,12 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
       setMessage("No questions in this category.");
       return;
     }
+    const saved = await savePersistedRoom(roomCode, "playing", nextQuestion, nextQuestion.id);
+
+    if (!saved) {
+      return;
+    }
+
     const payload: BroadcastPayload = { type: "room-start", question: nextQuestion, startedAt: Date.now() };
     channelRef.current.send({ type: "broadcast", event: "room-event", payload });
   }
@@ -264,8 +337,14 @@ export function MultiplayerGame({ questions, selectedCategory, onBack }: { quest
     setMessage("Create or join a room to start.");
   }
 
-  function resetRoom() {
+  async function resetRoom() {
     if (!channelRef.current || !isHost) {
+      return;
+    }
+
+    const saved = await savePersistedRoom(roomCode, "lobby", null, selectedRoomQuestion?.id ?? null);
+
+    if (!saved) {
       return;
     }
 
