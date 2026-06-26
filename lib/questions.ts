@@ -23,6 +23,7 @@ type QuestionRow = {
   hint: string | null;
   difficulty: TriviaDifficulty | null;
   max_guesses: number | null;
+  created_at: string | null;
   categories: { name: string } | { name: string }[] | null;
   answers: AnswerRow[] | null;
 };
@@ -69,6 +70,7 @@ function mapQuestion(row: QuestionRow): TriviaQuestion {
     category: getCategoryName(row.categories),
     difficulty: row.difficulty ?? "medium",
     maxGuesses: row.max_guesses ?? 5,
+    createdAt: row.created_at ?? undefined,
     answers
   };
 }
@@ -81,9 +83,9 @@ export async function getQuestions(): Promise<TriviaQuestion[]> {
 
   const { data, error } = await supabase
     .from("questions")
-    .select("id,title,hint,difficulty,max_guesses,categories(name),answers(id,label,rank,base_points,rarity_score,rarity_label,aliases(alias))")
+    .select("id,title,hint,difficulty,max_guesses,created_at,categories(name),answers(id,label,rank,base_points,rarity_score,rarity_label,aliases(alias))")
     .eq("active", true)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
 
   if (error || !data?.length) {
     return localQuestions;

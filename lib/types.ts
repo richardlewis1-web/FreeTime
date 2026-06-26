@@ -8,6 +8,7 @@ export type TriviaQuestion = {
   category: string;
   difficulty: TriviaDifficulty;
   maxGuesses: number;
+  createdAt?: string;
   answers: TriviaAnswer[];
 };
 

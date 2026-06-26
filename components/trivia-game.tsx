@@ -156,15 +156,14 @@ function buildResult(question: TriviaQuestion, foundAnswerIds: string[], wrongGu
   };
 }
 
-function getDailyQuestionIndex(questions: TriviaQuestion[], now = new Date()) {
-  if (questions.length === 0) {
-    return 0;
+function getQuestionOfTheDay(questions: TriviaQuestion[]) {
+  const questionsWithDates = questions.filter((question) => question.createdAt);
+
+  if (questionsWithDates.length > 0) {
+    return [...questionsWithDates].sort((first, second) => new Date(second.createdAt as string).getTime() - new Date(first.createdAt as string).getTime())[0];
   }
 
-  const dateKey = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayNumber = Math.floor(dateKey / 86400000);
-
-  return dayNumber % questions.length;
+  return questions[0];
 }
 
 function sortLeaderboard(entries: LeaderboardEntry[]) {
@@ -193,7 +192,7 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     () => (selectedCategory === "All" ? playableQuestions : playableQuestions.filter((question) => question.category === selectedCategory)),
     [playableQuestions, selectedCategory]
   );
-  const dailyQuestion = playableQuestions[getDailyQuestionIndex(playableQuestions)] ?? playableQuestions[0];
+  const dailyQuestion = getQuestionOfTheDay(playableQuestions);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("play");
   const [guess, setGuess] = useState("");
