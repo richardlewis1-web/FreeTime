@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #f4f0da;
+  background: #07130f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(247, 201, 72, 0.14), transparent 27rem),
+    radial-gradient(circle at 100% 14%, rgba(185, 255, 77, 0.12), transparent 25rem),
+    linear-gradient(180deg, #07130f 0%, #10251d 48%, #07130f 100%);
+  color: #f4f0da;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.16;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(244, 240, 218, 0.44) 50%, transparent calc(50% + 1px)),
+    radial-gradient(circle at 50% 32%, transparent 0 74px, rgba(244, 240, 218, 0.32) 76px, transparent 78px),
+    linear-gradient(0deg, rgba(244, 240, 218, 0.16) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 88px;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(185, 255, 77, 0.55);
+  outline-offset: 2px;
+}
+
+@keyframes answer-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes wrong-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+.answer-pop {
+  animation: answer-pop 220ms ease-out;
+}
+
+.wrong-shake {
+  animation: wrong-shake 260ms ease-in-out;
+}
+
+
+.pitch-panel-lines {
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(244, 240, 218, 0.54) 50%, transparent calc(50% + 1px)),
+    radial-gradient(circle at 50% 50%, transparent 0 56px, rgba(244, 240, 218, 0.44) 58px, transparent 60px);
+}
+
+
