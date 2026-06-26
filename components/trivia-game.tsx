@@ -7,7 +7,7 @@ import { getCategoryMeta } from "@/lib/categories";
 import type { GameResult, RarityLabel, TriviaAnswer, TriviaDifficulty, TriviaQuestion } from "@/lib/types";
 
 type GuessResult = "correct" | "duplicate" | "wrong" | "empty";
-type GameStatus = "playing" | "won" | "lost-guesses" | "lost-time" | "revealed";
+type GameStatus = "playing" | "won" | "lost-guesses" | "revealed";
 type ViewMode = "play" | "create" | "rooms";
 type DraftAnswer = { label: string; aliases: string };
 type LeaderboardEntry = {
@@ -53,25 +53,6 @@ function normalize(value: string) {
 
 function slugify(value: string) {
   return normalize(value).replace(/ /g, "-") || "answer";
-}
-
-const difficultyTimer: Record<TriviaDifficulty, { baseSeconds: number; secondsPerAnswer: number }> = {
-  easy: { baseSeconds: 30, secondsPerAnswer: 5 },
-  medium: { baseSeconds: 45, secondsPerAnswer: 6 },
-  hard: { baseSeconds: 60, secondsPerAnswer: 7 }
-};
-
-function getQuestionTimeLimit(question: TriviaQuestion) {
-  const timing = difficultyTimer[question.difficulty];
-
-  return timing.baseSeconds + question.answers.length * timing.secondsPerAnswer;
-}
-
-function formatTime(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-
-  return minutes + ":" + remainingSeconds.toString().padStart(2, "0");
 }
 
 function getAnswerPoints(answer: TriviaAnswer) {
@@ -199,7 +180,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   const [guess, setGuess] = useState("");
   const [foundAnswerIds, setFoundAnswerIds] = useState<string[]>([]);
   const [wrongGuesses, setWrongGuesses] = useState<string[]>([]);
-  const [timeLeft, setTimeLeft] = useState(questions[0] ? getQuestionTimeLimit(questions[0]) : 0);
   const [status, setStatus] = useState<GameStatus>("playing");
   const [message, setMessage] = useState("Kick off with your first guess.");
   const [guessFeedback, setGuessFeedback] = useState<"idle" | "wrong">("idle");
@@ -222,7 +202,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   const guessesRemaining = question.maxGuesses - wrongGuesses.length;
   const liveScore = foundAnswers.reduce((total, answer) => total + getAnswerPoints(answer), 0);
   const progress = Math.round((foundAnswerIds.length / question.answers.length) * 100);
-  const timeLimit = getQuestionTimeLimit(question);
   const isGameOver = status !== "playing";
   const result = isGameOver ? buildResult(question, foundAnswerIds, wrongGuesses, liveScore) : null;
 
@@ -347,23 +326,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setQuestionIndex(0);
   }, [categories, categoryQuestions.length, questionIndex, selectedCategory]);
 
-  useEffect(() => {
-    if (viewMode !== "play" || status !== "playing") {
-      return;
-    }
-
-    if (timeLeft <= 0) {
-      setStatus("lost-time");
-      setMessage("Time is up.");
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setTimeLeft((currentTime) => Math.max(0, currentTime - 1));
-    }, 1000);
-
-    return () => window.clearTimeout(timer);
-  }, [status, timeLeft, viewMode]);
 
   useEffect(() => {
     if (status === "playing" && foundAnswerIds.length === question.answers.length) {
@@ -494,7 +456,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setGuess("");
     setFoundAnswerIds([]);
     setWrongGuesses([]);
-    setTimeLeft(getQuestionTimeLimit(nextQuestion));
     setStatus("playing");
     setSavedResultKey("");
     setMessage("New question. Start naming.");
@@ -516,7 +477,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setGuess("");
     setFoundAnswerIds([]);
     setWrongGuesses([]);
-    setTimeLeft(getQuestionTimeLimit(targetQuestion));
     setStatus("playing");
     setSavedResultKey("");
     setMessage(nextMessage);
@@ -557,7 +517,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setGuess("");
     setFoundAnswerIds([]);
     setWrongGuesses([]);
-    setTimeLeft(getQuestionTimeLimit(nextQuestion));
     setSavedResultKey("");
     setMessage("Skipping lists you've already played.");
   }, [categoryQuestions, completedQuestionIds, question.id, status]);
@@ -573,7 +532,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setWrongGuesses([]);
 
     if (nextQuestion && !isQuestionCompleted(nextQuestion)) {
-      setTimeLeft(getQuestionTimeLimit(nextQuestion));
       setStatus("playing");
       setMessage("Category selected. Start naming.");
       return;
@@ -640,7 +598,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setGuess("");
     setFoundAnswerIds([]);
     setWrongGuesses([]);
-    setTimeLeft(getQuestionTimeLimit(customQuestion));
     setStatus("playing");
     setMessage("Custom question saved. Start naming.");
     setViewMode("play");
@@ -798,10 +755,6 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
                 <p className="mt-2 text-sm font-semibold leading-5 text-brand-cream/65">{dailyQuestion.hint}</p>
                 <p className="mt-3 text-xs font-black uppercase tracking-wide text-brand-cream/45">{dailyQuestion.category} - {dailyQuestion.answers.length} answers - {dailyQuestion.difficulty}</p>
               </div>
-              <div className="shrink-0 rounded-lg border border-brand-cream/10 bg-brand-bg/55 px-3 py-2 text-center">
-                <p className="text-lg font-black text-brand-gold">{formatTime(getQuestionTimeLimit(dailyQuestion))}</p>
-                <p className="text-[0.65rem] font-black uppercase tracking-wide text-brand-cream/45">Timer</p>
-              </div>
             </div>
             <button type="button" onClick={() => startSpecificQuestion(dailyQuestion, "Question of the day loaded. Start naming.")} className="relative mt-4 w-full rounded-lg bg-brand-gold px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-sm transition active:scale-95">
               Play today&apos;s question
@@ -845,14 +798,11 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
             <p className="text-sm font-semibold text-brand-cream/70">{selectedCategory} - Question {questionIndex + 1} of {categoryQuestions.length}</p>
             <h2 className="mt-3 text-2xl font-black leading-tight">{question.title}</h2>
           </div>
-          <div className="grid shrink-0 grid-cols-1 gap-2 text-center">
-            <div className="rounded-lg bg-brand-lime px-3 py-2 text-xl font-black text-brand-bg">{formatTime(timeLeft)}</div>
-            <div className="rounded-lg border border-brand-gold/35 bg-brand-bg/55 px-3 py-2 text-sm font-black text-brand-gold">{liveScore} pts</div>
-          </div>
+          <div className="shrink-0 rounded-lg border border-brand-gold/35 bg-brand-bg/55 px-3 py-2 text-sm font-black text-brand-gold">{liveScore} pts</div>
         </div>
 
         <p className="relative mt-4 text-sm leading-6 text-brand-cream/80">{question.hint}</p>
-        <p className="relative mt-2 text-xs font-bold uppercase tracking-wide text-brand-cream/60">{formatTime(timeLimit)} total - {question.answers.length} answers - {question.difficulty}</p>
+        <p className="relative mt-2 text-xs font-bold uppercase tracking-wide text-brand-cream/60">{question.answers.length} answers - {question.difficulty}</p>
 
         <div className="relative mt-6 grid grid-cols-3 gap-2 text-center text-xs font-black uppercase tracking-wide text-brand-cream/80">
           <div className="rounded-lg border border-brand-cream/10 bg-brand-bg/45 px-2 py-3"><span className="block text-lg text-brand-cream">{foundAnswerIds.length}/{question.answers.length}</span>Found</div>
