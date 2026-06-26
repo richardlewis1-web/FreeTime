@@ -10,8 +10,22 @@ type GuessResult = "correct" | "duplicate" | "wrong" | "empty";
 type GameStatus = "playing" | "won" | "lost-guesses" | "lost-time" | "revealed";
 type ViewMode = "play" | "create" | "rooms";
 type DraftAnswer = { label: string; aliases: string };
+type LeaderboardEntry = {
+  id: string;
+  playerName: string;
+  score: number;
+  foundCount: number;
+  totalAnswers: number;
+  accuracy: number;
+  guessesUsed: number;
+  questionTitle: string;
+  category: string;
+  createdAt: string;
+};
 
 const CUSTOM_QUESTIONS_KEY = "free-time-custom-questions";
+const PLAYER_NAME_KEY = "free-time-player-name";
+const LEADERBOARD_KEY = "free-time-leaderboard";
 const rarityScores: Record<RarityLabel, number> = {
   "Tap-in": 10,
   Solid: 25,
@@ -142,6 +156,25 @@ function buildResult(question: TriviaQuestion, foundAnswerIds: string[], wrongGu
   };
 }
 
+function getDailyQuestionIndex(questions: TriviaQuestion[], now = new Date()) {
+  if (questions.length === 0) {
+    return 0;
+  }
+
+  const dateKey = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayNumber = Math.floor(dateKey / 86400000);
+
+  return dayNumber % questions.length;
+}
+
+function sortLeaderboard(entries: LeaderboardEntry[]) {
+  return [...entries].sort((a, b) => b.score - a.score || b.accuracy - a.accuracy || b.foundCount - a.foundCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+function cleanPlayerName(value: string) {
+  return value.trim().replace(/\s+/g, " ").slice(0, 18);
+}
+
 export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   const [customQuestions, setCustomQuestions] = useState<TriviaQuestion[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -160,6 +193,7 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     () => (selectedCategory === "All" ? playableQuestions : playableQuestions.filter((question) => question.category === selectedCategory)),
     [playableQuestions, selectedCategory]
   );
+  const dailyQuestion = playableQuestions[getDailyQuestionIndex(playableQuestions)] ?? playableQuestions[0];
   const [questionIndex, setQuestionIndex] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("play");
   const [guess, setGuess] = useState("");
@@ -176,6 +210,9 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   const [maxGuesses, setMaxGuesses] = useState(5);
   const [draftAnswers, setDraftAnswers] = useState<DraftAnswer[]>([{ label: "", aliases: "" }]);
   const [builderMessage, setBuilderMessage] = useState("Add at least one answer to save a question.");
+  const [playerName, setPlayerName] = useState("");
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [savedResultKey, setSavedResultKey] = useState("");
 
   const question = categoryQuestions[questionIndex] ?? categoryQuestions[0] ?? playableQuestions[0];
   const foundSet = useMemo(() => new Set(foundAnswerIds), [foundAnswerIds]);
@@ -189,7 +226,25 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
   const result = isGameOver ? buildResult(question, foundAnswerIds, wrongGuesses, liveScore) : null;
 
   useEffect(() => {
+    const savedName = window.localStorage.getItem(PLAYER_NAME_KEY);
+    const savedScores = window.localStorage.getItem(LEADERBOARD_KEY);
     const savedQuestions = window.localStorage.getItem(CUSTOM_QUESTIONS_KEY);
+
+    if (savedName) {
+      setPlayerName(savedName);
+    }
+
+    if (savedScores) {
+      try {
+        const parsedScores = JSON.parse(savedScores) as LeaderboardEntry[];
+
+        if (Array.isArray(parsedScores)) {
+          setLeaderboard(sortLeaderboard(parsedScores).slice(0, 25));
+        }
+      } catch {
+        window.localStorage.removeItem(LEADERBOARD_KEY);
+      }
+    }
 
     if (!savedQuestions) {
       return;
@@ -205,6 +260,56 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
       window.localStorage.removeItem(CUSTOM_QUESTIONS_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    const cleanName = cleanPlayerName(playerName);
+
+    if (cleanName) {
+      window.localStorage.setItem(PLAYER_NAME_KEY, cleanName);
+      return;
+    }
+
+    window.localStorage.removeItem(PLAYER_NAME_KEY);
+  }, [playerName]);
+
+  useEffect(() => {
+    if (!result) {
+      return;
+    }
+
+    const cleanName = cleanPlayerName(playerName);
+
+    if (!cleanName) {
+      return;
+    }
+
+    const resultKey = [question.id, status, result.finalScore, result.foundCount, result.guessesUsed].join(":");
+
+    if (savedResultKey === resultKey) {
+      return;
+    }
+
+    const entry: LeaderboardEntry = {
+      id: resultKey + ":" + Date.now(),
+      playerName: cleanName,
+      score: result.finalScore,
+      foundCount: result.foundCount,
+      totalAnswers: result.totalAnswers,
+      accuracy: result.accuracy,
+      guessesUsed: result.guessesUsed,
+      questionTitle: question.title,
+      category: question.category,
+      createdAt: new Date().toISOString()
+    };
+
+    setLeaderboard((current) => {
+      const nextLeaderboard = sortLeaderboard([entry, ...current]).slice(0, 25);
+      window.localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(nextLeaderboard));
+
+      return nextLeaderboard;
+    });
+    setSavedResultKey(resultKey);
+  }, [playerName, question.category, question.id, question.title, result, savedResultKey, status]);
 
   useEffect(() => {
     if (!categories.includes(selectedCategory)) {
@@ -316,7 +421,25 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     setWrongGuesses([]);
     setTimeLeft(getQuestionTimeLimit(nextQuestion));
     setStatus("playing");
+    setSavedResultKey("");
     setMessage("New question. Start naming.");
+    setViewMode("play");
+  }
+
+  function startSpecificQuestion(targetQuestion: TriviaQuestion, nextMessage = "Question loaded. Start naming.") {
+    const nextCategory = targetQuestion.category;
+    const nextCategoryQuestions = nextCategory === "All" ? playableQuestions : playableQuestions.filter((candidate) => candidate.category === nextCategory);
+    const nextIndex = Math.max(0, nextCategoryQuestions.findIndex((candidate) => candidate.id === targetQuestion.id));
+
+    setSelectedCategory(nextCategory);
+    setQuestionIndex(nextIndex);
+    setGuess("");
+    setFoundAnswerIds([]);
+    setWrongGuesses([]);
+    setTimeLeft(getQuestionTimeLimit(targetQuestion));
+    setStatus("playing");
+    setSavedResultKey("");
+    setMessage(nextMessage);
     setViewMode("play");
   }
 
@@ -422,6 +545,12 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
     window.localStorage.removeItem(CUSTOM_QUESTIONS_KEY);
     startQuestion(0);
     setBuilderMessage("Custom questions cleared from this browser.");
+  }
+
+  function clearLeaderboard() {
+    setLeaderboard([]);
+    setSavedResultKey("");
+    window.localStorage.removeItem(LEADERBOARD_KEY);
   }
 
   if (viewMode === "rooms") {
@@ -535,6 +664,44 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
         </div>
       </section>
 
+      <section className="mb-4 rounded-lg border border-brand-cream/10 bg-brand-panel/80 p-4 shadow-sm">
+        <label className="block text-xs font-black uppercase tracking-[0.16em] text-brand-cream/60">
+          Player name
+          <input
+            value={playerName}
+            onChange={(event) => setPlayerName(event.target.value)}
+            placeholder="Add your name"
+            className="mt-2 w-full rounded-md border border-brand-cream/10 bg-brand-cream px-4 py-3 text-base font-black normal-case tracking-normal text-ink placeholder:text-ink/45"
+            maxLength={18}
+          />
+        </label>
+        <p className="mt-2 text-xs font-semibold text-brand-cream/55">Scores save locally on this device when a round ends.</p>
+      </section>
+
+      {dailyQuestion ? (
+        <section className="mb-4 overflow-hidden rounded-lg border border-brand-gold/35 bg-brand-panel shadow-sm">
+          <div className="h-1 bg-brand-gold" />
+          <div className="relative p-4">
+            <div className="absolute inset-0 opacity-10 pitch-panel-lines" />
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-gold/85">Question of the day</p>
+                <h2 className="mt-2 text-xl font-black leading-tight text-brand-cream">{dailyQuestion.title}</h2>
+                <p className="mt-2 text-sm font-semibold leading-5 text-brand-cream/65">{dailyQuestion.hint}</p>
+                <p className="mt-3 text-xs font-black uppercase tracking-wide text-brand-cream/45">{dailyQuestion.category} - {dailyQuestion.answers.length} answers - {dailyQuestion.difficulty}</p>
+              </div>
+              <div className="shrink-0 rounded-lg border border-brand-cream/10 bg-brand-bg/55 px-3 py-2 text-center">
+                <p className="text-lg font-black text-brand-gold">{formatTime(getQuestionTimeLimit(dailyQuestion))}</p>
+                <p className="text-[0.65rem] font-black uppercase tracking-wide text-brand-cream/45">Timer</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => startSpecificQuestion(dailyQuestion, "Question of the day loaded. Start naming.")} className="relative mt-4 w-full rounded-lg bg-brand-gold px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-sm transition active:scale-95">
+              Play today's question
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {categoryCards.map((categoryOption) => {
           const isSelected = selectedCategory === categoryOption.name;
@@ -613,7 +780,7 @@ export function TriviaGame({ questions }: { questions: TriviaQuestion[] }) {
       <p className="min-h-7 px-1 text-sm font-bold text-brand-gold" aria-live="polite">{message}</p>
 
       {result ? (
-        <ResultsScreen result={result} onReset={resetQuestion} onNext={() => moveQuestion(1)} />
+        <ResultsScreen result={result} playerName={cleanPlayerName(playerName)} leaderboard={leaderboard} onClearLeaderboard={clearLeaderboard} onReset={resetQuestion} onNext={() => moveQuestion(1)} />
       ) : (
         <AnswerGrid answers={question.answers} foundSet={foundSet} reveal={false} />
       )}
@@ -662,7 +829,7 @@ function AnswerGrid({ answers, foundSet, reveal }: { answers: TriviaAnswer[]; fo
   );
 }
 
-function ResultsScreen({ result, onReset, onNext }: { result: GameResult; onReset: () => void; onNext: () => void }) {
+function ResultsScreen({ result, playerName, leaderboard, onClearLeaderboard, onReset, onNext }: { result: GameResult; playerName: string; leaderboard: LeaderboardEntry[]; onClearLeaderboard: () => void; onReset: () => void; onNext: () => void }) {
   return (
     <section className="mt-5 space-y-4">
       <section className="relative overflow-hidden rounded-lg border border-brand-lime/25 bg-brand-panel p-5 text-brand-cream shadow-brand">
@@ -681,6 +848,8 @@ function ResultsScreen({ result, onReset, onNext }: { result: GameResult; onRese
           <Stat label="Guesses used" value={String(result.guessesUsed)} />
         </div>
       </section>
+
+      <LeaderboardPanel playerName={playerName} entries={leaderboard} onClear={onClearLeaderboard} />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <PubCard title="Rarest answer found" answer={result.rarestAnswerFound} empty="No rare pulls. All tap-ins, if that." tone="good" />
@@ -705,6 +874,39 @@ function ResultsScreen({ result, onReset, onNext }: { result: GameResult; onRese
           Next list
         </button>
       </div>
+    </section>
+  );
+}
+
+function LeaderboardPanel({ playerName, entries, onClear }: { playerName: string; entries: LeaderboardEntry[]; onClear: () => void }) {
+  return (
+    <section className="rounded-lg border border-brand-gold/25 bg-brand-panel/85 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-brand-gold/90">Leaderboard</h3>
+          <p className="mt-1 text-xs font-bold text-brand-cream/55">{playerName ? "Saved under " + playerName : "Add a name before playing to save your score."}</p>
+        </div>
+        <button type="button" onClick={onClear} disabled={entries.length === 0} className="rounded-md border border-brand-cream/10 px-3 py-2 text-xs font-black uppercase text-brand-cream/70 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35">
+          Clear
+        </button>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="mt-4 rounded-lg bg-brand-bg/45 px-3 py-4 text-sm font-bold text-brand-cream/65">No scores yet. Finish a round with a name on the board.</p>
+      ) : (
+        <ol className="mt-4 space-y-2">
+          {entries.slice(0, 8).map((entry, index) => (
+            <li key={entry.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg bg-brand-bg/45 px-3 py-3">
+              <span className="text-sm font-black text-brand-gold">#{index + 1}</span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-brand-cream">{entry.playerName}</p>
+                <p className="truncate text-xs font-bold text-brand-cream/50">{entry.foundCount}/{entry.totalAnswers} - {entry.accuracy}% - {entry.category}</p>
+              </div>
+              <span className="text-base font-black text-brand-lime">{entry.score}</span>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }
