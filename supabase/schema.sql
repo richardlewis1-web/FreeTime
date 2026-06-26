@@ -86,6 +86,24 @@ begin
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'aliases' and policyname = 'Public aliases insert') then
     create policy "Public aliases insert" on public.aliases for insert with check (true);
   end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'questions' and policyname = 'Public questions update') then
+    create policy "Public questions update" on public.questions for update using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'questions' and policyname = 'Public questions delete') then
+    create policy "Public questions delete" on public.questions for delete using (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'answers' and policyname = 'Public answers update') then
+    create policy "Public answers update" on public.answers for update using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'answers' and policyname = 'Public answers delete') then
+    create policy "Public answers delete" on public.answers for delete using (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'aliases' and policyname = 'Public aliases update') then
+    create policy "Public aliases update" on public.aliases for update using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'aliases' and policyname = 'Public aliases delete') then
+    create policy "Public aliases delete" on public.aliases for delete using (true);
+  end if;
 end $$;
 
 insert into public.categories (slug, name, description, difficulty_vibe, icon, sort_order)

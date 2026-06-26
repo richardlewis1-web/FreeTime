@@ -14,6 +14,37 @@ type CategoryRow = {
   icon: string;
 };
 
+type QuestionSummary = {
+  id: string;
+  title: string;
+  category_id: string;
+  categories: { name: string } | { name: string }[] | null;
+};
+
+type ExistingAliasRow = {
+  alias: string;
+};
+
+type ExistingAnswerRow = {
+  id: string;
+  label: string;
+  rank: number | null;
+  base_points: number | null;
+  rarity_score: number | null;
+  rarity_label: RarityLabel | null;
+  aliases: ExistingAliasRow[] | null;
+};
+
+type ExistingQuestionRow = {
+  id: string;
+  category_id: string;
+  title: string;
+  hint: string | null;
+  difficulty: TriviaDifficulty | null;
+  max_guesses: number | null;
+  answers: ExistingAnswerRow[] | null;
+};
+
 type AnswerDraft = {
   label: string;
   aliases: string;
@@ -42,30 +73,57 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function getQuestionCategoryName(question: QuestionSummary) {
+  if (Array.isArray(question.categories)) {
+    return question.categories[0]?.name ?? "Uncategorised";
+  }
+
+  return question.categories?.name ?? "Uncategorised";
+}
+
+function emptyAnswers() {
+  return [{ ...blankAnswer }, { ...blankAnswer }, { ...blankAnswer }];
+}
+
 export default function AdminQuestionsPage() {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const [questionList, setQuestionList] = useState<QuestionSummary[]>([]);
+  const [editingQuestionId, setEditingQuestionId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [title, setTitle] = useState("");
   const [hint, setHint] = useState("");
   const [difficulty, setDifficulty] = useState<TriviaDifficulty>("medium");
   const [maxGuesses, setMaxGuesses] = useState(5);
-  const [answers, setAnswers] = useState<AnswerDraft[]>([{ ...blankAnswer }, { ...blankAnswer }, { ...blankAnswer }]);
+  const [answers, setAnswers] = useState<AnswerDraft[]>(emptyAnswers());
   const [status, setStatus] = useState("Loading categories...");
   const [questionCount, setQuestionCount] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
 
+  const isEditing = Boolean(editingQuestionId);
   const readyToSave = useMemo(
     () => Boolean(isSupabaseConfigured && categoryId && title.trim() && answers.some((answer) => answer.label.trim())),
     [answers, categoryId, title]
   );
 
-  const refreshQuestionCount = useCallback(async () => {
+  const refreshQuestions = useCallback(async () => {
     if (!supabase) {
       return;
     }
 
-    const { count } = await supabase.from("questions").select("id", { count: "exact", head: true });
-    setQuestionCount(count ?? 0);
+    const { data, count, error } = await supabase
+      .from("questions")
+      .select("id,title,category_id,categories(name)", { count: "exact" })
+      .eq("active", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setStatus(`Could not load existing questions: ${error.message}`);
+      return;
+    }
+
+    setQuestionList((data ?? []) as QuestionSummary[]);
+    setQuestionCount(count ?? data?.length ?? 0);
   }, []);
 
   useEffect(() => {
@@ -88,12 +146,23 @@ export default function AdminQuestionsPage() {
       const rows = data ?? [];
       setCategories(rows);
       setCategoryId(rows[0]?.id ?? "");
-      setStatus(rows.length ? "Ready to add a question." : "No categories found. Run the Supabase SQL first.");
-      await refreshQuestionCount();
+      setStatus(rows.length ? "Ready to add or edit a question." : "No categories found. Run the Supabase SQL first.");
+      await refreshQuestions();
     }
 
     loadCategories();
-  }, [refreshQuestionCount]);
+  }, [refreshQuestions]);
+
+  function resetForm(nextCategoryId = categories[0]?.id ?? "") {
+    setEditingQuestionId("");
+    setCategoryId(nextCategoryId);
+    setTitle("");
+    setHint("");
+    setDifficulty("medium");
+    setMaxGuesses(5);
+    setAnswers(emptyAnswers());
+    setStatus("Ready to add a new question.");
+  }
 
   async function seedCategories() {
     if (!supabase) {
@@ -132,6 +201,53 @@ export default function AdminQuestionsPage() {
     setIsSaving(false);
   }
 
+  async function loadQuestionForEdit(questionId: string) {
+    if (!supabase || !questionId) {
+      resetForm();
+      return;
+    }
+
+    setIsLoadingQuestion(true);
+    setStatus("Loading question for editing...");
+
+    const { data, error } = await supabase
+      .from("questions")
+      .select("id,category_id,title,hint,difficulty,max_guesses,answers(id,label,rank,base_points,rarity_score,rarity_label,aliases(alias))")
+      .eq("id", questionId)
+      .single();
+
+    if (error || !data) {
+      setStatus(`Could not load question: ${error?.message ?? "No question returned."}`);
+      setIsLoadingQuestion(false);
+      return;
+    }
+
+    const question = data as ExistingQuestionRow;
+    const nextAnswers = (question.answers ?? [])
+      .slice()
+      .sort((first, second) => (first.rank ?? 0) - (second.rank ?? 0))
+      .map((answer) => ({
+        label: answer.label,
+        aliases: (answer.aliases ?? [])
+          .map((alias) => alias.alias)
+          .filter((alias) => alias && alias !== answer.label)
+          .join(", "),
+        basePoints: answer.base_points ?? 100,
+        rarityScore: answer.rarity_score ?? 25,
+        rarityLabel: answer.rarity_label ?? "Solid"
+      }));
+
+    setEditingQuestionId(question.id);
+    setCategoryId(question.category_id);
+    setTitle(question.title);
+    setHint(question.hint ?? "");
+    setDifficulty(question.difficulty ?? "medium");
+    setMaxGuesses(question.max_guesses ?? 5);
+    setAnswers(nextAnswers.length ? nextAnswers : [{ ...blankAnswer }]);
+    setStatus("Editing existing question. Save changes when ready.");
+    setIsLoadingQuestion(false);
+  }
+
   function updateAnswer(index: number, nextAnswer: Partial<AnswerDraft>) {
     setAnswers((current) => current.map((answer, answerIndex) => (answerIndex === index ? { ...answer, ...nextAnswer } : answer)));
   }
@@ -144,43 +260,16 @@ export default function AdminQuestionsPage() {
     setAnswers((current) => current.filter((_, answerIndex) => answerIndex !== index));
   }
 
-  async function saveQuestion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!supabase || !readyToSave) {
-      setStatus("Add a title, category and at least one answer first.");
-      return;
+  async function saveAnswers(questionId: string, cleanAnswers: AnswerDraft[]) {
+    if (!supabase) {
+      return "Supabase is not configured.";
     }
-
-    setIsSaving(true);
-    setStatus("Saving question...");
-
-    const { data: question, error: questionError } = await supabase
-      .from("questions")
-      .insert({
-        category_id: categoryId,
-        title: title.trim(),
-        hint: hint.trim(),
-        difficulty,
-        max_guesses: maxGuesses,
-        active: true
-      })
-      .select("id")
-      .single();
-
-    if (questionError || !question) {
-      setStatus(`Could not save question: ${questionError?.message ?? "No question was returned."}`);
-      setIsSaving(false);
-      return;
-    }
-
-    const cleanAnswers = answers.map((answer) => ({ ...answer, label: answer.label.trim() })).filter((answer) => answer.label);
 
     const { data: savedAnswers, error: answersError } = await supabase
       .from("answers")
       .insert(
         cleanAnswers.map((answer, index) => ({
-          question_id: question.id,
+          question_id: questionId,
           label: answer.label,
           rank: index + 1,
           base_points: answer.basePoints,
@@ -191,9 +280,7 @@ export default function AdminQuestionsPage() {
       .select("id,label");
 
     if (answersError || !savedAnswers) {
-      setStatus(`Question saved, but answers failed: ${answersError?.message ?? "No answers were returned."}`);
-      setIsSaving(false);
-      return;
+      return answersError?.message ?? "No answers were returned.";
     }
 
     const aliasRows = savedAnswers.flatMap((savedAnswer, index) => {
@@ -207,19 +294,87 @@ export default function AdminQuestionsPage() {
     if (aliasRows.length) {
       const { error: aliasesError } = await supabase.from("aliases").insert(aliasRows);
       if (aliasesError) {
-        setStatus(`Question and answers saved, but aliases failed: ${aliasesError.message}`);
-        setIsSaving(false);
-        return;
+        return aliasesError.message;
       }
     }
 
-    setTitle("");
-    setHint("");
-    setDifficulty("medium");
-    setMaxGuesses(5);
-    setAnswers([{ ...blankAnswer }, { ...blankAnswer }, { ...blankAnswer }]);
-    await refreshQuestionCount();
-    setStatus("Question saved. It should now appear in the game.");
+    return "";
+  }
+
+  async function saveQuestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!supabase || !readyToSave) {
+      setStatus("Add a title, category and at least one answer first.");
+      return;
+    }
+
+    setIsSaving(true);
+    setStatus(isEditing ? "Updating question..." : "Saving question...");
+
+    const cleanAnswers = answers.map((answer) => ({ ...answer, label: answer.label.trim() })).filter((answer) => answer.label);
+    let questionId = editingQuestionId;
+
+    if (isEditing) {
+      const { error: questionError } = await supabase
+        .from("questions")
+        .update({
+          category_id: categoryId,
+          title: title.trim(),
+          hint: hint.trim(),
+          difficulty,
+          max_guesses: maxGuesses,
+          active: true
+        })
+        .eq("id", editingQuestionId);
+
+      if (questionError) {
+        setStatus(`Could not update question: ${questionError.message}`);
+        setIsSaving(false);
+        return;
+      }
+
+      const { error: deleteError } = await supabase.from("answers").delete().eq("question_id", editingQuestionId);
+
+      if (deleteError) {
+        setStatus(`Question updated, but old answers could not be replaced: ${deleteError.message}`);
+        setIsSaving(false);
+        return;
+      }
+    } else {
+      const { data: question, error: questionError } = await supabase
+        .from("questions")
+        .insert({
+          category_id: categoryId,
+          title: title.trim(),
+          hint: hint.trim(),
+          difficulty,
+          max_guesses: maxGuesses,
+          active: true
+        })
+        .select("id")
+        .single();
+
+      if (questionError || !question) {
+        setStatus(`Could not save question: ${questionError?.message ?? "No question was returned."}`);
+        setIsSaving(false);
+        return;
+      }
+
+      questionId = question.id;
+    }
+
+    const answerError = await saveAnswers(questionId, cleanAnswers);
+
+    if (answerError) {
+      setStatus(`Question saved, but answers failed: ${answerError}`);
+      setIsSaving(false);
+      return;
+    }
+
+    await refreshQuestions();
+    resetForm(categoryId);
+    setStatus(isEditing ? "Question updated. Refresh the homepage to see it." : "Question saved. It should now appear in the game.");
     setIsSaving(false);
   }
 
@@ -229,9 +384,9 @@ export default function AdminQuestionsPage() {
         <header className="rounded-lg border border-brand-cream/10 bg-brand-panel/85 p-4 shadow-brand">
           <Logo variant="compact" />
           <p className="mt-4 text-xs font-black uppercase tracking-[0.18em] text-brand-lime/80">Admin</p>
-          <h1 className="mt-2 text-2xl font-black">Add questions</h1>
+          <h1 className="mt-2 text-2xl font-black">Manage questions</h1>
           <p className="mt-2 text-sm font-semibold leading-6 text-brand-cream/70">
-            Add list-completion questions and answer aliases. No login yet, so keep this URL private for now.
+            Add new lists or edit existing Supabase questions and aliases. No login yet, so keep this URL private for now.
           </p>
         </header>
 
@@ -254,7 +409,38 @@ export default function AdminQuestionsPage() {
           ) : null}
         </section>
 
+        <section className="rounded-lg border border-brand-cream/10 bg-brand-panel/85 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-brand-lime/80">Existing questions</h2>
+            <button type="button" onClick={() => resetForm()} className="rounded-md border border-brand-lime/30 px-3 py-2 text-xs font-black uppercase text-brand-lime">
+              New
+            </button>
+          </div>
+
+          <label className="mt-4 block text-xs font-black uppercase tracking-[0.16em] text-brand-cream/60">
+            Choose question to edit
+            <select
+              value={editingQuestionId}
+              onChange={(event) => loadQuestionForEdit(event.target.value)}
+              disabled={isLoadingQuestion || !questionList.length}
+              className="mt-2 w-full rounded-md border border-brand-cream/10 bg-brand-bg px-3 py-3 text-base font-bold text-brand-cream disabled:opacity-50"
+            >
+              <option value="">Add a new question</option>
+              {questionList.map((question) => (
+                <option key={question.id} value={question.id}>
+                  {question.title} - {getQuestionCategoryName(question)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+
         <form onSubmit={saveQuestion} className="flex flex-col gap-4 rounded-lg border border-brand-cream/10 bg-brand-panel/85 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-brand-lime/80">{isEditing ? "Edit question" : "Add question"}</h2>
+            {isEditing ? <span className="rounded-md bg-brand-gold px-2 py-1 text-xs font-black uppercase text-brand-bg">Editing</span> : null}
+          </div>
+
           <label className="text-xs font-black uppercase tracking-[0.16em] text-brand-cream/60">
             Category
             <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="mt-2 w-full rounded-md border border-brand-cream/10 bg-brand-bg px-3 py-3 text-base font-bold text-brand-cream">
@@ -331,8 +517,8 @@ export default function AdminQuestionsPage() {
             ))}
           </section>
 
-          <button type="submit" disabled={!readyToSave || isSaving} className="rounded-lg bg-brand-lime px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-brand disabled:cursor-not-allowed disabled:opacity-50">
-            Save question
+          <button type="submit" disabled={!readyToSave || isSaving || isLoadingQuestion} className="rounded-lg bg-brand-lime px-4 py-4 text-sm font-black uppercase text-brand-bg shadow-brand disabled:cursor-not-allowed disabled:opacity-50">
+            {isEditing ? "Save changes" : "Save question"}
           </button>
         </form>
       </div>
